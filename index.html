@@ -392,7 +392,7 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
   <div class="shop-header"><div class="wrap">
     <div class="eyebrow">Shop</div>
     <h1>Products</h1>
-    <p style="color:var(--dim);margin-top:8px;font-size:15px">Free delivery on orders over R1,500 · R250 delivery on orders under R1,500.</p>
+    <p style="color:var(--dim);margin-top:8px;font-size:15px">Delivery via Courier Guy, Aramex or similar — quoted per order based on your location and weight.</p>
     <div class="filter-row" id="filter-row">
       <button class="filter-btn active" data-tag="all" onclick="filterShop(this)">All</button>
     </div>
@@ -473,8 +473,8 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
         <h3>Order summary</h3>
         <div id="sum-items"></div>
         <div class="sum-row"><span>Subtotal</span><span id="sum-sub">R 0</span></div>
-        <div class="sum-row"><span>Delivery</span><span id="sum-del" style="color:var(--gold2)">R 250</span></div>
-        <p style="font-size:12px;color:var(--dim);margin-top:6px" id="sum-del-note">Free delivery on orders over R1,500</p>
+        <div class="sum-row"><span>Delivery</span><span id="sum-del" style="color:var(--dim)">TBD</span></div>
+        <p style="font-size:12px;color:var(--dim);margin-top:6px" id="sum-del-note">Delivery via Courier Guy, Aramex or similar — quoted based on your location and the weight of your order.</p>
         <div class="sum-total"><span>Total</span><span class="val" id="sum-tot">R 0</span></div>
       </div>
     </div>
@@ -561,7 +561,7 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
   <div class="drawer-foot" id="cart-foot" style="display:none">
     <div class="del-note" id="del-note"></div>
     <div class="cart-row"><span>Subtotal</span><span class="val" id="cart-sub">R 0</span></div>
-    <div class="cart-row"><span>Delivery</span><span class="val" id="cart-del">R 250</span></div>
+    <div class="cart-row"><span>Delivery</span><span class="val" id="cart-del" style="color:var(--dim)">TBD</span></div>
     <div class="cart-row total"><span>Total</span><span class="val" id="cart-tot">R 0</span></div>
     <button class="checkout-btn" onclick="goCheckout()">Proceed to checkout →</button>
   </div>
@@ -596,8 +596,7 @@ var SB_URL  = 'https://tjkzksrsalwnlnjirkwz.supabase.co';
 var SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqa3prc3JzYWx3bmxuamlya3d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzOTgwMjcsImV4cCI6MjEwNjk3NDAyN30.N1UL4xG-CxVg2gKkuN1RzEJdLLZMasNLpeYBrShg3W4';
 var WA      = '27792645049';
 var EMAIL   = 'solvexsecure@gmail.com';
-var FREE_DEL= 1500;
-var DEL_FEE = 250;
+// Delivery is quoted per order based on location and weight
 
 /* ===== SUPABASE INIT ===== */
 var sb = supabase.createClient(SB_URL, SB_KEY);
@@ -608,8 +607,7 @@ try{ cart = JSON.parse(localStorage.getItem('sx_cart')||'[]'); }catch(e){}
 function saveCart(){ try{ localStorage.setItem('sx_cart', JSON.stringify(cart)); }catch(e){} }
 function cartItem(id){ return cart.find(function(i){ return i.id===id; }); }
 function sub(){ return cart.reduce(function(s,i){ return s+i.price*i.qty; },0); }
-function del(){ return sub()>=FREE_DEL ? 0 : DEL_FEE; }
-function tot(){ return sub()+del(); }
+function tot(){ return sub(); } // delivery quoted separately
 function totalQty(){ return cart.reduce(function(s,i){ return s+i.qty; },0); }
 function fmt(n){ return 'R '+Number(n).toLocaleString('en-ZA'); }
 
@@ -683,7 +681,7 @@ document.getElementById('detail-dec').addEventListener('click',function(){
   if(!currentProduct) return;
   cQty(currentProduct.id,-1); refreshDetailCart();
 });
-function removeFromCart(id){ cart=cart.filter(function(i){return i.id!==id;}); saveCart(); refreshCartUI(); }
+window.removeFromCart=function(id){ cart=cart.filter(function(i){return i.id!==id;}); saveCart(); refreshCartUI(); };
 window.cQty = function(id,d){
   var item=cartItem(id); if(!item)return;
   item.qty+=d;
@@ -701,8 +699,8 @@ function updateBadge(){
 }
 
 function updateQtyControls(){
-  document.querySelectorAll('[data-pid]').forEach(function(btn){
-    var id=btn.dataset.pid;
+  document.querySelectorAll('[data-cart-id]').forEach(function(btn){
+    var id=btn.dataset.cartId;
     var item=cartItem(id); var qty=item?item.qty:0;
     var qc=document.getElementById('qc-'+id);
     var qn=document.getElementById('qn-'+id);
@@ -721,7 +719,7 @@ function renderCartDrawer(){
     body.innerHTML='<div class="cart-empty">Your cart is empty.</div>';
     if(foot) foot.style.display='none'; return;
   }
-  var s=sub(), d=del(), t=tot();
+  var s=sub();
   body.innerHTML=cart.map(function(i){
     return '<div class="cart-item">'+
       (i.img?'<img class="cart-item-img" src="'+esc(i.img)+'" alt="">':'<div class="cart-item-img"></div>')+
@@ -729,35 +727,41 @@ function renderCartDrawer(){
         '<h4>'+esc(i.name)+'</h4>'+
         '<div class="item-price">'+fmt(i.price)+' each</div>'+
         '<div class="cart-item-qty">'+
-          '<button class="cqty-btn" onclick="cQty(\''+i.id+'\',-1)">−</button>'+
+          '<button class="cqty-btn" data-cid="'+i.id+'" data-cd="-1">−</button>'+
           '<span>'+i.qty+'</span>'+
-          '<button class="cqty-btn" onclick="cQty(\''+i.id+'\',1)">+</button>'+
-          '<button class="remove-item" onclick="removeFromCart(\''+i.id+'\')">Remove</button>'+
+          '<button class="cqty-btn" data-cid="'+i.id+'" data-cd="1">+</button>'+
+          '<button class="remove-item" data-rid="'+i.id+'">Remove</button>'+
         '</div>'+
       '</div></div>';
   }).join('');
+
+  body.onclick=function(e){
+    var qb=e.target.closest('[data-cid]');
+    if(qb){ cQty(qb.dataset.cid,parseInt(qb.dataset.cd)); return; }
+    var rb=e.target.closest('[data-rid]');
+    if(rb){ window.removeFromCart(rb.dataset.rid); }
+  };
+
   if(foot){
     foot.style.display='block';
     var note=document.getElementById('del-note');
-    if(d===0) note.innerHTML='<span style="color:var(--success)">✓ Free delivery applied</span>';
-    else note.innerHTML='Add '+fmt(FREE_DEL-s)+' more for free delivery';
+    note.innerHTML='Delivery quoted after order — via <strong>Courier Guy, Aramex</strong> or similar based on your location and package weight.';
     document.getElementById('cart-sub').textContent=fmt(s);
-    var dEl=document.getElementById('cart-del');
-    dEl.textContent=d===0?'FREE':fmt(d);
-    dEl.style.color=d===0?'var(--success)':'';
-    document.getElementById('cart-tot').textContent=fmt(t);
+    document.getElementById('cart-del').textContent='TBD';
+    document.getElementById('cart-del').style.color='var(--dim)';
+    document.getElementById('cart-tot').textContent=fmt(s)+' + delivery';
   }
 }
 
 function renderCheckoutSummary(){
   var el=document.getElementById('sum-items'); if(!el) return;
-  var s=sub(), d=del(), t=tot();
+  var s=sub();
   el.innerHTML=cart.map(function(i){ return '<div class="sum-item"><span>'+i.qty+'× '+esc(i.name)+'</span><span>'+fmt(i.price*i.qty)+'</span></div>'; }).join('');
   var sv=document.getElementById('sum-sub'); var dv=document.getElementById('sum-del'); var tv=document.getElementById('sum-tot'); var dn=document.getElementById('sum-del-note');
   if(sv) sv.textContent=fmt(s);
-  if(dv){ dv.textContent=d===0?'FREE':fmt(d); dv.style.color=d===0?'var(--success)':''; }
-  if(tv) tv.textContent=fmt(t);
-  if(dn) dn.style.display=d===0?'none':'block';
+  if(dv){ dv.textContent='TBD'; dv.style.color='var(--dim)'; }
+  if(tv) tv.textContent=fmt(s)+' + delivery';
+  if(dn) dn.textContent='Delivery via Courier Guy, Aramex or similar — quoted based on your location and the weight of your order.';
 }
 
 window.openCart  = function(){ document.getElementById('cart-drawer').classList.add('open'); document.getElementById('drawer-overlay').classList.add('open'); };
@@ -863,14 +867,16 @@ function buildMsg(){
   var email=document.getElementById('ck-email').value.trim();
   var address=document.getElementById('ck-address').value.trim();
   var notes=document.getElementById('ck-notes').value.trim();
-  var s=sub(),d=del(),t=tot();
+  var s=sub();
   var lines=['Hi Solvex Secure, I would like to place the following order:','','ORDER:'];
   cart.forEach(function(i){ lines.push('  '+i.qty+' x '+i.name+' @ '+fmt(i.price)+' = '+fmt(i.price*i.qty)); });
-  lines.push('','Subtotal: '+fmt(s),'Delivery: '+(d===0?'FREE':fmt(d)),'Total: '+fmt(t),'');
+  lines.push('','Subtotal: '+fmt(s));
+  lines.push('Delivery: To be confirmed (Courier Guy / Aramex — based on location and weight)');
+  lines.push('');
   lines.push('MY DETAILS:','Name: '+name,'Phone: '+phone,'Email: '+email);
-  if(address) lines.push('Address: '+address);
+  if(address) lines.push('Delivery address: '+address);
   if(notes) lines.push('Notes: '+notes);
-  lines.push('','Please confirm stock availability and send payment details. Thank you.');
+  lines.push('','Please confirm stock availability, delivery cost and payment details. Thank you.');
   return lines.join('\n');
 }
 
@@ -881,14 +887,13 @@ async function submitOrder(method){
   if(!name||!phone||!email){ document.getElementById('ck-error').style.display='block'; return; }
   document.getElementById('ck-error').style.display='none';
   var msg=buildMsg();
-  // save to Supabase
   try{
     await sb.from('orders').insert([{
       customer_name:name, customer_phone:phone, customer_email:email,
       delivery_address:document.getElementById('ck-address').value.trim(),
       notes:document.getElementById('ck-notes').value.trim(),
       items:JSON.parse(JSON.stringify(cart)),
-      subtotal:sub(), delivery_fee:del(), total:tot(), status:'new'
+      subtotal:sub(), delivery_fee:0, total:sub(), status:'new'
     }]);
   }catch(e){ console.warn('Order save failed',e); }
   if(method==='wa') window.open('https://wa.me/'+WA+'?text='+encodeURIComponent(msg),'_blank');
