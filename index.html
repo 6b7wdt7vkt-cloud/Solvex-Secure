@@ -109,6 +109,29 @@ h3{color:var(--head)}
 .qty-num{flex:1;text-align:center;font-size:15px;font-weight:700;background:transparent;border:none;pointer-events:none}
 .no-products{text-align:center;padding:64px 24px;color:var(--dim)}
 .shop-loading{text-align:center;padding:64px 24px;color:var(--dim);font-size:15px}
+.prod-card-inner{cursor:pointer;flex:1;display:flex;flex-direction:column}
+/* PRODUCT DETAIL PAGE */
+.detail-wrap{max-width:900px;margin:0 auto;padding:40px 24px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:flex-start;margin-top:28px}
+.detail-img-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:32px;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;overflow:hidden}
+.detail-img-box img{max-width:100%;max-height:100%;object-fit:contain}
+.detail-img-placeholder{color:var(--dim)}
+.detail-info{display:flex;flex-direction:column;gap:14px}
+.detail-category{font-size:12.5px;font-weight:600;color:var(--gold2);text-transform:uppercase;letter-spacing:1.4px}
+.detail-name{font-size:28px;font-weight:800;color:var(--text);letter-spacing:-.5px;line-height:1.15}
+.detail-desc{font-size:15px;color:var(--dim);line-height:1.7;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.detail-specs{display:flex;flex-wrap:wrap;gap:7px}
+.detail-price{font-size:32px;font-weight:800;color:var(--gold2)}
+.detail-price small{font-size:14px;font-weight:400;color:var(--dim)}
+.detail-actions{display:flex;gap:10px;margin-top:4px}
+.detail-add-btn{flex:1;font-size:15px;font-weight:700;padding:15px;border-radius:6px;border:none;background:var(--gold);color:#0A1E31;cursor:pointer}
+.detail-add-btn:hover{background:var(--gold2)}
+.detail-qty-ctrl{display:none;align-items:center;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:1}
+.detail-qty-ctrl.visible{display:flex}
+.detail-qty-btn{background:var(--raised);border:none;color:var(--text);height:50px;width:50px;font-size:22px;cursor:pointer;flex:none}
+.detail-qty-btn:hover{background:var(--panel)}
+.detail-qty-num{flex:1;text-align:center;font-size:17px;font-weight:700;background:transparent;border:none;pointer-events:none}
+@media(max-width:700px){.detail-grid{grid-template-columns:1fr}.detail-name{font-size:22px}}
 
 /* CART DRAWER */
 .drawer-overlay{position:fixed;inset:0;background:rgba(4,12,22,.65);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -379,6 +402,37 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
   </div>
 </div>
 
+<!-- ========== PRODUCT DETAIL ========== -->
+<div class="page" id="page-product">
+  <div class="detail-wrap">
+    <button class="back-link" onclick="nav('shop')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Back to shop
+    </button>
+    <div class="detail-grid">
+      <div class="detail-img-box" id="detail-img-box">
+        <div class="detail-img-placeholder">No image</div>
+      </div>
+      <div class="detail-info">
+        <div class="detail-category" id="detail-category"></div>
+        <div class="detail-name" id="detail-name"></div>
+        <div class="detail-desc" id="detail-desc" style="display:none"></div>
+        <div class="detail-specs" id="detail-specs"></div>
+        <div class="detail-price" id="detail-price"></div>
+        <div id="detail-stock-badge"></div>
+        <div class="detail-actions">
+          <button class="detail-add-btn" id="detail-add-btn">Add to cart</button>
+          <div class="detail-qty-ctrl" id="detail-qty-ctrl">
+            <button class="detail-qty-btn" id="detail-dec">−</button>
+            <span class="detail-qty-num" id="detail-qty-num">0</span>
+            <button class="detail-qty-btn" id="detail-inc">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ========== CHECKOUT ========== -->
 <div class="page" id="page-checkout">
   <div class="checkout-wrap">
@@ -559,12 +613,76 @@ function tot(){ return sub()+del(); }
 function totalQty(){ return cart.reduce(function(s,i){ return s+i.qty; },0); }
 function fmt(n){ return 'R '+Number(n).toLocaleString('en-ZA'); }
 
-function addToCart(id, name, price, img){
-  var item = cartItem(id);
+function doAddToCart(p){
+  var item = cartItem(p.id);
   if(item) item.qty++;
-  else cart.push({id:id,name:name,price:price,qty:1,img:img||''});
+  else cart.push({id:p.id, name:p.name, price:p.price, qty:1, img:p.image_url||''});
   saveCart(); refreshCartUI();
 }
+// keep old signature for any remaining callers
+window.addToCart=function(id){ var p=allProducts.find(function(x){return x.id===id}); if(p) doAddToCart(p); };
+
+/* ===== PRODUCT DETAIL PAGE ===== */
+var currentProduct = null;
+
+window.openProduct=function(id){
+  var p=allProducts.find(function(x){return x.id===id});
+  if(!p) return;
+  currentProduct=p;
+
+  // Image
+  var imgBox=document.getElementById('detail-img-box');
+  imgBox.innerHTML=p.image_url
+    ?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.name)+'">'
+    :'<div class="detail-img-placeholder">No image</div>';
+
+  // Text
+  document.getElementById('detail-category').textContent=p.category||'';
+  document.getElementById('detail-name').textContent=p.name;
+  var descEl=document.getElementById('detail-desc');
+  if(p.description){ descEl.textContent=p.description; descEl.style.display='block'; }
+  else descEl.style.display='none';
+  document.getElementById('detail-specs').innerHTML=(p.specs||[]).map(function(c){return '<span class="spec-chip">'+esc(c)+'</span>';}).join('');
+  document.getElementById('detail-price').innerHTML=fmt(p.price)+' <small>per unit</small>';
+
+  // Stock
+  var stockEl=document.getElementById('detail-stock-badge');
+  stockEl.innerHTML=p.stock>0
+    ?'<span class="stock-badge in" style="display:inline-flex">'+p.stock+' in stock</span>'
+    :'<span class="stock-badge out" style="display:inline-flex">Out of stock</span>';
+
+  refreshDetailCart();
+  nav('product');
+};
+
+function refreshDetailCart(){
+  if(!currentProduct) return;
+  var item=cartItem(currentProduct.id);
+  var qty=item?item.qty:0;
+  var addBtn=document.getElementById('detail-add-btn');
+  var qtyCtrl=document.getElementById('detail-qty-ctrl');
+  var qtyNum=document.getElementById('detail-qty-num');
+  if(qty>0){
+    addBtn.style.display='none'; qtyCtrl.classList.add('visible'); qtyNum.textContent=qty;
+  } else {
+    addBtn.style.display=''; qtyCtrl.classList.remove('visible');
+  }
+}
+
+document.getElementById('detail-add-btn').addEventListener('click',function(){
+  if(!currentProduct) return;
+  doAddToCart(currentProduct);
+  refreshDetailCart();
+  openCart();
+});
+document.getElementById('detail-inc').addEventListener('click',function(){
+  if(!currentProduct) return;
+  cQty(currentProduct.id,1); refreshDetailCart();
+});
+document.getElementById('detail-dec').addEventListener('click',function(){
+  if(!currentProduct) return;
+  cQty(currentProduct.id,-1); refreshDetailCart();
+});
 function removeFromCart(id){ cart=cart.filter(function(i){return i.id!==id;}); saveCart(); refreshCartUI(); }
 window.cQty = function(id,d){
   var item=cartItem(id); if(!item)return;
@@ -575,6 +693,7 @@ window.cQty = function(id,d){
 
 function refreshCartUI(){
   updateBadge(); renderCartDrawer(); renderCheckoutSummary(); updateQtyControls();
+  if(typeof refreshDetailCart==='function') refreshDetailCart();
 }
 
 function updateBadge(){
@@ -680,23 +799,51 @@ function renderShop(prods){
   }
   grid.innerHTML=prods.map(function(p){
     var chips=(p.specs||[]).map(function(c){ return '<span class="spec-chip">'+esc(c)+'</span>'; }).join('');
+    var imgHtml=p.image_url
+      ?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.name)+'">'
+      :'<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
     return '<div class="prod-card" data-tag="'+(p.category||'')+'">'+
-      '<div class="prod-img">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.name)+'">':'<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>')+'</div>'+
-      '<div class="prod-body">'+
-        '<div class="prod-name">'+esc(p.name)+'</div>'+
-        (p.description?'<div class="prod-desc">'+esc(p.description)+'</div>':'')+
-        '<div class="prod-specs">'+chips+'</div>'+
-        '<div class="prod-price">'+fmt(p.price)+' <small>per unit</small></div>'+
-        '<div class="prod-actions">'+
-          '<button class="add-btn" data-pid="'+p.id+'" onclick="addToCart(\''+p.id+'\',\''+esc(p.name)+'\','+p.price+',\''+esc(p.image_url||'')+'\');openCart()">Add to cart</button>'+
-          '<div class="qty-ctrl" id="qc-'+p.id+'">'+
-            '<button class="qty-btn" onclick="cQty(\''+p.id+'\',-1)">−</button>'+
-            '<span class="qty-num" id="qn-'+p.id+'">0</span>'+
-            '<button class="qty-btn" onclick="cQty(\''+p.id+'\',1)">+</button>'+
-          '</div>'+
+      // Clickable area → product detail page
+      '<div class="prod-card-inner" data-open-product="'+p.id+'">'+
+        '<div class="prod-img">'+imgHtml+'</div>'+
+        '<div class="prod-body" style="padding-bottom:0">'+
+          '<div class="prod-name">'+esc(p.name)+'</div>'+
+          (p.description?'<div class="prod-desc">'+esc(p.description.substring(0,80))+(p.description.length>80?'…':'')+'</div>':'')+
+          '<div class="prod-specs">'+chips+'</div>'+
+          '<div class="prod-price">'+fmt(p.price)+' <small>per unit</small></div>'+
+          '<div style="font-size:12px;color:var(--gold2);margin-top:6px;margin-bottom:12px">View details →</div>'+
         '</div>'+
-      '</div></div>';
+      '</div>'+
+      // Add to cart — separate from the clickable detail area
+      '<div class="prod-actions" style="padding:0 18px 16px">'+
+        '<button class="add-btn" data-cart-id="'+p.id+'">Add to cart</button>'+
+        '<div class="qty-ctrl" id="qc-'+p.id+'">'+
+          '<button class="qty-btn" data-qid="'+p.id+'" data-d="-1">−</button>'+
+          '<span class="qty-num" id="qn-'+p.id+'">0</span>'+
+          '<button class="qty-btn" data-qid="'+p.id+'" data-d="1">+</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
   }).join('');
+
+  // Event delegation — no inline JS, no string escaping issues
+  grid.addEventListener('click', function(e){
+    // Add to cart button
+    var addBtn=e.target.closest('[data-cart-id]');
+    if(addBtn){
+      var id=addBtn.dataset.cartId;
+      var p=allProducts.find(function(x){return x.id===id});
+      if(p){ doAddToCart(p); openCart(); }
+      return;
+    }
+    // Qty +/- buttons
+    var qBtn=e.target.closest('[data-qid]');
+    if(qBtn){ cQty(qBtn.dataset.qid, parseInt(qBtn.dataset.d)); return; }
+    // Open product detail (click anywhere else on the card)
+    var cardInner=e.target.closest('[data-open-product]');
+    if(cardInner){ openProduct(cardInner.dataset.openProduct); }
+  });
+
   updateQtyControls();
 }
 
