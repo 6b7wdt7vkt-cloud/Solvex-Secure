@@ -109,6 +109,9 @@ h3{color:var(--head)}
 .qty-num{flex:1;text-align:center;font-size:15px;font-weight:700;background:transparent;border:none;pointer-events:none}
 .no-products{text-align:center;padding:64px 24px;color:var(--dim)}
 .shop-loading{text-align:center;padding:64px 24px;color:var(--dim);font-size:15px}
+.qty-select{background:var(--raised);border:1px solid var(--line);color:var(--text);padding:0 8px;border-radius:6px;height:42px;font-size:14px;font-weight:600;cursor:pointer;min-width:64px}
+.qty-select:focus{outline:none;border-color:var(--gold2)}
+.in-cart-badge{display:none;font-size:12px;color:var(--success);font-weight:600;margin-top:6px;padding:4px 0;text-align:center}
 .prod-card-inner{cursor:pointer;flex:1;display:flex;flex-direction:column}
 /* PRODUCT DETAIL PAGE */
 .detail-wrap{max-width:900px;margin:0 auto;padding:40px 24px}
@@ -395,6 +398,9 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
     <p style="color:var(--dim);margin-top:8px;font-size:15px">Delivery via Courier Guy, Aramex or similar — quoted per order based on your location and weight.</p>
     <div class="filter-row" id="filter-row">
       <button class="filter-btn active" data-tag="all" onclick="filterShop(this)">All</button>
+      <button class="filter-btn" data-tag="Cameras" onclick="filterShop(this)">Cameras</button>
+      <button class="filter-btn" data-tag="Batteries" onclick="filterShop(this)">Batteries</button>
+      <button class="filter-btn" data-tag="Charge Controllers" onclick="filterShop(this)">Charge Controllers</button>
     </div>
   </div></div>
   <div class="wrap">
@@ -527,7 +533,14 @@ td{padding:12px;border-bottom:1px solid var(--raised);vertical-align:middle}
                 <div class="field"><label>Price (ZAR) *</label><input id="p-price" type="number" min="0" step="1" placeholder="0"></div>
                 <div class="field"><label>Stock qty</label><input id="p-stock" type="number" min="0" step="1" placeholder="0"></div>
               </div>
-              <div class="field"><label>Category (filter tag)</label><input id="p-cat" placeholder="e.g. 12.8V or Cameras or Solar Panels"></div>
+              <div class="field"><label>Category</label>
+                <select id="p-cat">
+                  <option value="">— Select category —</option>
+                  <option value="Cameras">Cameras</option>
+                  <option value="Batteries">Batteries</option>
+                  <option value="Charge Controllers">Charge Controllers</option>
+                </select>
+              </div>
               <div class="field">
                 <label>Spec chips — type and press Enter</label>
                 <div class="chips-input" id="chips-box" onclick="document.getElementById('chip-input').focus()">
@@ -612,13 +625,28 @@ function totalQty(){ return cart.reduce(function(s,i){ return s+i.qty; },0); }
 function fmt(n){ return 'R '+Number(n).toLocaleString('en-ZA'); }
 
 function doAddToCart(p){
+  doAddToCartQty(p, 1);
+}
+function doAddToCartQty(p, qty){
+  qty = Math.max(1, parseInt(qty)||1);
   var item = cartItem(p.id);
-  if(item) item.qty++;
-  else cart.push({id:p.id, name:p.name, price:p.price, qty:1, img:p.image_url||''});
+  if(item) item.qty += qty;
+  else cart.push({id:p.id, name:p.name, price:p.price, qty:qty, img:p.image_url||''});
   saveCart(); refreshCartUI();
 }
-// keep old signature for any remaining callers
 window.addToCart=function(id){ var p=allProducts.find(function(x){return x.id===id}); if(p) doAddToCart(p); };
+
+function updateInCartBadges(){
+  cart.forEach(function(item){
+    var badge=document.getElementById('icb-'+item.id);
+    if(badge){ badge.style.display='block'; badge.textContent='✓ '+item.qty+' in cart'; }
+  });
+  // clear badges for items no longer in cart
+  document.querySelectorAll('.in-cart-badge').forEach(function(b){
+    var id=b.id.replace('icb-','');
+    if(!cartItem(id)){ b.style.display='none'; b.textContent=''; }
+  });
+}
 
 /* ===== PRODUCT DETAIL PAGE ===== */
 var currentProduct = null;
@@ -690,7 +718,8 @@ window.cQty = function(id,d){
 };
 
 function refreshCartUI(){
-  updateBadge(); renderCartDrawer(); renderCheckoutSummary(); updateQtyControls();
+  updateBadge(); renderCartDrawer(); renderCheckoutSummary();
+  updateInCartBadges();
   if(typeof refreshDetailCart==='function') refreshDetailCart();
 }
 
@@ -698,18 +727,7 @@ function updateBadge(){
   var b=document.getElementById('cart-badge'); if(b) b.textContent=totalQty();
 }
 
-function updateQtyControls(){
-  document.querySelectorAll('[data-cart-id]').forEach(function(btn){
-    var id=btn.dataset.cartId;
-    var item=cartItem(id); var qty=item?item.qty:0;
-    var qc=document.getElementById('qc-'+id);
-    var qn=document.getElementById('qn-'+id);
-    if(!qc||!qn) return;
-    qn.textContent=qty;
-    btn.style.display = qty>0?'none':'';
-    qc.classList.toggle('visible', qty>0);
-  });
-}
+function updateQtyControls(){ updateInCartBadges(); } // kept for compatibility
 
 function renderCartDrawer(){
   var body=document.getElementById('cart-body');
@@ -787,27 +805,22 @@ async function loadShop(){
 
 function renderShop(prods){
   var grid=document.getElementById('prod-grid');
-  var filterRow=document.getElementById('filter-row');
   if(!grid) return;
-
-  // build filter tags
-  var tags=[];
-  prods.forEach(function(p){ if(p.category&&!tags.includes(p.category)) tags.push(p.category); });
-  var btns='<button class="filter-btn active" data-tag="all" onclick="filterShop(this)">All</button>';
-  tags.forEach(function(t){ btns+='<button class="filter-btn" data-tag="'+esc(t)+'" onclick="filterShop(this)">'+esc(t)+'</button>'; });
-  if(filterRow) filterRow.innerHTML=btns;
 
   if(!prods.length){
     grid.innerHTML='<div class="no-products"><p>No products available right now.</p></div>';
     return;
   }
+
+  var qtyOptions='';
+  for(var n=1;n<=10;n++) qtyOptions+='<option value="'+n+'">'+n+'</option>';
+
   grid.innerHTML=prods.map(function(p){
     var chips=(p.specs||[]).map(function(c){ return '<span class="spec-chip">'+esc(c)+'</span>'; }).join('');
     var imgHtml=p.image_url
       ?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.name)+'">'
       :'<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
     return '<div class="prod-card" data-tag="'+(p.category||'')+'">'+
-      // Clickable area → product detail page
       '<div class="prod-card-inner" data-open-product="'+p.id+'">'+
         '<div class="prod-img">'+imgHtml+'</div>'+
         '<div class="prod-body" style="padding-bottom:0">'+
@@ -818,37 +831,34 @@ function renderShop(prods){
           '<div style="font-size:12px;color:var(--gold2);margin-top:6px;margin-bottom:12px">View details →</div>'+
         '</div>'+
       '</div>'+
-      // Add to cart — separate from the clickable detail area
-      '<div class="prod-actions" style="padding:0 18px 16px">'+
-        '<button class="add-btn" data-cart-id="'+p.id+'">Add to cart</button>'+
-        '<div class="qty-ctrl" id="qc-'+p.id+'">'+
-          '<button class="qty-btn" data-qid="'+p.id+'" data-d="-1">−</button>'+
-          '<span class="qty-num" id="qn-'+p.id+'">0</span>'+
-          '<button class="qty-btn" data-qid="'+p.id+'" data-d="1">+</button>'+
+      '<div style="padding:0 18px 16px">'+
+        '<div style="display:flex;gap:8px;margin-top:4px">'+
+          '<select class="qty-select" id="qs-'+p.id+'">'+qtyOptions+'</select>'+
+          '<button class="add-btn" data-cart-id="'+p.id+'" style="flex:1">Add to cart</button>'+
         '</div>'+
+        '<div class="in-cart-badge" id="icb-'+p.id+'"></div>'+
       '</div>'+
     '</div>';
   }).join('');
 
-  // Event delegation — no inline JS, no string escaping issues
-  grid.addEventListener('click', function(e){
-    // Add to cart button
+  // Single onclick assignment prevents duplicate listeners on re-render
+  grid.onclick=function(e){
     var addBtn=e.target.closest('[data-cart-id]');
     if(addBtn){
       var id=addBtn.dataset.cartId;
       var p=allProducts.find(function(x){return x.id===id});
-      if(p){ doAddToCart(p); openCart(); }
+      if(!p) return;
+      var sel=document.getElementById('qs-'+id);
+      var qty=sel?parseInt(sel.value)||1:1;
+      doAddToCartQty(p, qty);
+      openCart();
       return;
     }
-    // Qty +/- buttons
-    var qBtn=e.target.closest('[data-qid]');
-    if(qBtn){ cQty(qBtn.dataset.qid, parseInt(qBtn.dataset.d)); return; }
-    // Open product detail (click anywhere else on the card)
     var cardInner=e.target.closest('[data-open-product]');
-    if(cardInner){ openProduct(cardInner.dataset.openProduct); }
-  });
+    if(cardInner && !e.target.closest('.qty-select')){ openProduct(cardInner.dataset.openProduct); }
+  };
 
-  updateQtyControls();
+  updateInCartBadges();
 }
 
 window.filterShop=function(btn){
@@ -1021,7 +1031,13 @@ window.startEdit=function(id){
   document.getElementById('p-desc').value=p.description||'';
   document.getElementById('p-price').value=p.price||'';
   document.getElementById('p-stock').value=p.stock||'';
-  document.getElementById('p-cat').value=p.category||'';
+  var catSel=document.getElementById('p-cat');
+  catSel.value=p.category||'';
+  // if saved category isn't in options, add it temporarily
+  if(p.category && catSel.value!==p.category){
+    var opt=document.createElement('option'); opt.value=p.category; opt.textContent=p.category;
+    catSel.appendChild(opt); catSel.value=p.category;
+  }
   document.getElementById('img-preview').innerHTML=p.image_url?'<img src="'+esc(p.image_url)+'">':'<span id="img-placeholder">No image yet</span>';
   renderChips();
   document.getElementById('form-title').textContent='Edit product';
@@ -1032,7 +1048,8 @@ window.startEdit=function(id){
 
 window.resetForm=function(){
   editId=null; pendingImg=null; chips=[];
-  ['p-name','p-desc','p-price','p-stock','p-cat'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['p-name','p-desc','p-price','p-stock'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('p-cat').value='';
   document.getElementById('img-preview').innerHTML='<span id="img-placeholder">No image yet</span>';
   document.getElementById('chip-input').value='';
   renderChips();
