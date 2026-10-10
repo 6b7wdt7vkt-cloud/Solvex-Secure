@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0F2A43">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin | Solvex Secure</title>
+<link rel="icon" href="/assets/logo-icon.png">
+<link rel="stylesheet" href="/assets/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-wrap" class="admin-login-wrap">
+  <div class="login-box">
+    <h2>Admin login</h2>
+    <p>Sign in to manage products and orders.</p>
+    <div class="field"><label>Email</label><input type="email" id="a-email" value="jaydinscholtemeyer@gmail.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="a-pw" placeholder="••••••••"></div>
+    <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px" id="login-btn">Sign in</button>
+    <div class="err-msg" id="login-err"></div>
+    <a href="/" style="display:block;margin-top:16px;font-size:13px;color:var(--dim)">← Back to site</a>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dash" style="display:none">
+  <div class="admin-bar">
+    <div class="wrap">
+      <div class="admin-title"><span class="admin-dot"></span>Solvex Admin</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span style="font-size:13px;color:var(--dim)" id="user-email"></span>
+        <button class="btn btn-ghost btn-sm" id="logout-btn">Sign out</button>
+        <a href="/" class="btn btn-ghost btn-sm">← Site</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" style="padding-top:28px;padding-bottom:64px">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="products">Products</button>
+      <button class="tab-btn" data-tab="orders">Orders <span id="orders-badge"></span></button>
+    </div>
+
+    <!-- PRODUCTS TAB -->
+    <div class="admin-tab active" id="tab-products">
+      <div class="admin-grid">
+
+        <!-- FORM -->
+        <div class="form-panel">
+          <h3 id="form-title">Add product</h3>
+          <div class="img-preview" id="img-preview"><span>No image yet</span></div>
+          <label class="file-label">Upload image<input type="file" id="p-img" accept="image/*"></label>
+          <div class="field"><label>Product name *</label><input id="p-name" placeholder="e.g. LiFePO4 Battery 100Ah"></div>
+          <div class="field">
+            <label>URL slug (auto-generated)</label>
+            <input id="p-slug" placeholder="e.g. lifepo4-100ah-battery">
+            <div class="slug-preview">URL: solvexsecure.co.za/products/<span id="slug-show">…</span></div>
+          </div>
+          <div class="field"><label>Description</label><textarea id="p-desc" placeholder="Full product description — shown on the product page."></textarea></div>
+          <div class="field-row">
+            <div class="field"><label>Price (ZAR) *</label><input id="p-price" type="number" min="0" step="1"></div>
+            <div class="field"><label>Stock qty</label><input id="p-stock" type="number" min="0" step="1"></div>
+          </div>
+          <div class="field"><label>Category</label>
+            <select id="p-cat">
+              <option value="">— Select —</option>
+              <option value="Cameras">Cameras</option>
+              <option value="Batteries">Batteries</option>
+              <option value="Charge Controllers">Charge Controllers</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Spec chips — type and press Enter</label>
+            <div class="chips-input" id="chips-box" onclick="document.getElementById('chip-in').focus()">
+              <input class="chip-text-input" id="chip-in" placeholder="e.g. 12.8V, 100Ah, LiFePO4…">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:6px">
+            <button class="btn btn-gold" style="flex:1;justify-content:center" id="save-btn">Save product</button>
+            <button class="btn btn-ghost" id="cancel-btn" style="display:none" onclick="resetForm()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- TABLE -->
+        <div id="prod-table"></div>
+      </div>
+    </div>
+
+    <!-- ORDERS TAB -->
+    <div class="admin-tab" id="tab-orders">
+      <div id="orders-table"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/assets/app.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  var editId = null;
+  var pendingImg = null;
+  var chips = [];
+  var adminProducts = [];
+
+  /* ===== AUTH ===== */
+  sb.auth.onAuthStateChange(function(event, session){
+    if(session){
+      document.getElementById('login-wrap').style.display = 'none';
+      document.getElementById('dash').style.display = 'block';
+      document.getElementById('user-email').textContent = session.user.email;
+      loadProducts(); loadOrders();
+    } else {
+      document.getElementById('login-wrap').style.display = 'flex';
+      document.getElementById('dash').style.display = 'none';
+    }
+  });
+
+  document.getElementById('login-btn').addEventListener('click', async function(){
+    var btn = this; btn.textContent = 'Signing in…'; btn.disabled = true;
+    try{
+      var r = await sb.auth.signInWithPassword({
+        email: document.getElementById('a-email').value.trim(),
+        password: document.getElementById('a-pw').value
+      });
+      if(r.error) throw r.error;
+      document.getElementById('login-err').textContent = '';
+    }catch(e){
+      document.getElementById('login-err').textContent = e.message || 'Incorrect email or password.';
+    }finally{ btn.textContent = 'Sign in'; btn.disabled = false; }
+  });
+  document.getElementById('a-pw').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-btn').click(); });
+  document.getElementById('logout-btn').addEventListener('click', function(){ sb.auth.signOut(); });
+
+  /* ===== TABS ===== */
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.admin-tab').forEach(function(t){ t.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'orders') loadOrders();
+    });
+  });
+
+  /* ===== SLUG AUTO-GENERATE ===== */
+  document.getElementById('p-name').addEventListener('input', function(){
+    if(!editId){
+      var s = generateSlug(this.value);
+      document.getElementById('p-slug').value = s;
+      document.getElementById('slug-show').textContent = s || '…';
+    }
+  });
+  document.getElementById('p-slug').addEventListener('input', function(){
+    document.getElementById('slug-show').textContent = this.value || '…';
+  });
+
+  /* ===== IMAGE UPLOAD ===== */
+  document.getElementById('p-img').addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    pendingImg = file;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      document.getElementById('img-preview').innerHTML = '<img src="'+ev.target.result+'">';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  /* ===== CHIPS ===== */
+  document.getElementById('chip-in').addEventListener('keydown', function(e){
+    if((e.key==='Enter'||e.key===',') && this.value.trim()){
+      e.preventDefault(); chips.push(this.value.trim()); this.value=''; renderChips();
+    }
+  });
+  window.removeChip = function(i){ chips.splice(i,1); renderChips(); };
+  function renderChips(){
+    var box = document.getElementById('chips-box');
+    var input = document.getElementById('chip-in');
+    box.innerHTML = '';
+    chips.forEach(function(c,i){
+      var span = document.createElement('span'); span.className = 'chip-item';
+      span.innerHTML = esc(c)+'<button class="chip-remove" onclick="removeChip('+i+')">×</button>';
+      box.appendChild(span);
+    });
+    box.appendChild(input);
+  }
+
+  /* ===== SAVE PRODUCT ===== */
+  document.getElementById('save-btn').addEventListener('click', async function(){
+    var name  = document.getElementById('p-name').value.trim();
+    var slug  = document.getElementById('p-slug').value.trim();
+    var price = parseInt(document.getElementById('p-price').value) || 0;
+    var stock = parseInt(document.getElementById('p-stock').value) || 0;
+    var cat   = document.getElementById('p-cat').value;
+    var desc  = document.getElementById('p-desc').value.trim();
+    if(!name){ toast('Product name is required','err'); return; }
+    if(!slug){ toast('Slug is required','err'); return; }
+
+    var btn = this; btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try{
+      var image_url = editId ? (adminProducts.find(function(x){return x.id===editId;})||{}).image_url||'' : '';
+      if(pendingImg){
+        var ext = pendingImg.name.split('.').pop().toLowerCase();
+        var fname = Date.now()+'-'+Math.random().toString(36).slice(2)+'.'+ext;
+        var up = await sb.storage.from('product-images').upload(fname, pendingImg, {upsert:true});
+        if(up.error) throw new Error('Image upload failed: '+up.error.message);
+        image_url = sb.storage.from('product-images').getPublicUrl(fname).data.publicUrl;
+      }
+      var payload = {name:name, slug:slug, description:desc, price:price, stock:stock, category:cat, specs:chips.slice(), image_url:image_url, active:true};
+      if(editId){
+        var r = await sb.from('products').update(payload).eq('id', editId);
+        if(r.error) throw r.error;
+        toast('Product updated','ok');
+      } else {
+        var r2 = await sb.from('products').insert([payload]);
+        if(r2.error) throw r2.error;
+        toast('Product added','ok');
+      }
+      resetForm(); await loadProducts();
+    }catch(e){
+      toast(e.message||'Save failed','err');
+    }finally{
+      btn.disabled = false;
+      btn.textContent = editId ? 'Update product' : 'Save product';
+    }
+  });
+
+  window.startEdit = function(id){
+    var p = adminProducts.find(function(x){return x.id===id;}); if(!p) return;
+    editId = id; pendingImg = null; chips = (p.specs||[]).slice();
+    document.getElementById('p-name').value  = p.name||'';
+    document.getElementById('p-slug').value  = p.slug||'';
+    document.getElementById('slug-show').textContent = p.slug||'…';
+    document.getElementById('p-desc').value  = p.description||'';
+    document.getElementById('p-price').value = p.price||'';
+    document.getElementById('p-stock').value = p.stock||'';
+    document.getElementById('p-cat').value   = p.category||'';
+    document.getElementById('img-preview').innerHTML = p.image_url ? '<img src="'+esc(p.image_url)+'">' : '<span>No image yet</span>';
+    renderChips();
+    document.getElementById('form-title').textContent = 'Edit product';
+    document.getElementById('save-btn').textContent = 'Update product';
+    document.getElementById('cancel-btn').style.display = 'block';
+    window.scrollTo(0,0);
+  };
+
+  window.resetForm = function(){
+    editId = null; pendingImg = null; chips = [];
+    ['p-name','p-slug','p-desc','p-price','p-stock'].forEach(function(id){ document.getElementById(id).value=''; });
+    document.getElementById('p-cat').value = '';
+    document.getElementById('slug-show').textContent = '…';
+    document.getElementById('img-preview').innerHTML = '<span>No image yet</span>';
+    document.getElementById('chip-in').value = ''; renderChips();
+    document.getElementById('form-title').textContent = 'Add product';
+    document.getElementById('save-btn').textContent = 'Save product';
+    document.getElementById('cancel-btn').style.display = 'none';
+  };
+
+  window.deleteProd = async function(id){
+    if(!confirm('Delete this product? Cannot be undone.')) return;
+    try{
+      var r = await sb.from('products').delete().eq('id', id);
+      if(r.error) throw r.error;
+      toast('Deleted','ok');
+      await loadProducts();
+      if(editId===id) resetForm();
+    }catch(e){ toast('Delete failed','err'); }
+  };
+
+  /* ===== LOAD PRODUCTS ===== */
+  async function loadProducts(){
+    var wrap = document.getElementById('prod-table');
+    wrap.innerHTML = '<div style="padding:24px;color:var(--dim)">Loading…</div>';
+    try{
+      var r = await sb.from('products').select('*').order('created_at',{ascending:false});
+      if(r.error) throw r.error;
+      adminProducts = r.data||[];
+      renderProductTable();
+    }catch(e){ toast('Failed to load products','err'); }
+  }
+
+  function renderProductTable(){
+    var wrap = document.getElementById('prod-table');
+    if(!adminProducts.length){ wrap.innerHTML='<div class="empty-table">No products yet — add your first one on the left.</div>'; return; }
+    wrap.innerHTML='<table><thead><tr><th></th><th>Name</th><th>Price</th><th>Stock</th><th>Category</th><th>URL</th><th></th></tr></thead><tbody>'+
+      adminProducts.map(function(p){
+        return '<tr>'+
+          '<td>'+(p.image_url?'<img class="row-thumb" src="'+esc(p.image_url)+'" alt="">':'<div class="row-thumb"></div>')+'</td>'+
+          '<td><strong>'+esc(p.name)+'</strong>'+(p.description?'<br><span style="font-size:12px;color:var(--dim)">'+esc(p.description.substring(0,60))+(p.description.length>60?'…':'')+'</span>':'')+'</td>'+
+          '<td>'+fmt(p.price)+'</td>'+
+          '<td><span class="stock-badge '+(p.stock>0?'in':'out')+'">'+(p.stock>0?p.stock+' in stock':'Out of stock')+'</span></td>'+
+          '<td style="color:var(--dim);font-size:13px">'+esc(p.category||'—')+'</td>'+
+          '<td style="font-size:12px;color:var(--dim)">'+(p.slug?'/products/'+esc(p.slug):'—')+'</td>'+
+          '<td class="row-actions">'+
+            '<button class="btn btn-ghost btn-sm" onclick="startEdit(\''+p.id+'\')">Edit</button>'+
+            '<a href="/products/'+esc(p.slug||'')+'" target="_blank" class="btn btn-ghost btn-sm">View</a>'+
+            '<button class="btn btn-danger btn-sm" onclick="deleteProd(\''+p.id+'\')">Delete</button>'+
+          '</td>'+
+        '</tr>';
+      }).join('')+
+    '</tbody></table>';
+  }
+
+  /* ===== ORDERS ===== */
+  async function loadOrders(){
+    var wrap = document.getElementById('orders-table');
+    wrap.innerHTML = '<div style="padding:24px;color:var(--dim)">Loading…</div>';
+    try{
+      var r = await sb.from('orders').select('*').order('created_at',{ascending:false});
+      if(r.error) throw r.error;
+      var orders = r.data||[];
+      var newCount = orders.filter(function(o){ return o.status==='new'; }).length;
+      var badge = document.getElementById('orders-badge');
+      if(badge) badge.textContent = newCount ? '('+newCount+')' : '';
+      if(!orders.length){ wrap.innerHTML='<div class="empty-table">No orders yet.</div>'; return; }
+      wrap.innerHTML='<table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr></thead><tbody>'+
+        orders.map(function(o){
+          var date = new Date(o.created_at).toLocaleDateString('en-ZA');
+          var items = (o.items||[]).map(function(i){ return i.qty+'× '+i.name; }).join(', ');
+          return '<tr>'+
+            '<td style="font-size:13px;color:var(--dim)">'+date+'</td>'+
+            '<td><strong>'+esc(o.customer_name||'—')+'</strong><br><span style="font-size:12px;color:var(--dim)">'+esc(o.customer_phone||'')+'<br>'+esc(o.customer_email||'')+'</span></td>'+
+            '<td style="font-size:13px;max-width:200px">'+esc(items)+'</td>'+
+            '<td style="font-family:monospace">'+fmt(o.total||0)+'</td>'+
+            '<td><button class="order-badge '+(o.status==='new'?'new':'actioned')+'" onclick="toggleOrder(\''+o.id+'\',\''+o.status+'\')">'+esc(o.status)+'</button></td>'+
+          '</tr>';
+        }).join('')+
+      '</tbody></table>';
+    }catch(e){ toast('Failed to load orders','err'); }
+  }
+
+  window.toggleOrder = async function(id, current){
+    var next = current==='new' ? 'actioned' : 'new';
+    try{
+      var r = await sb.from('orders').update({status:next}).eq('id',id);
+      if(r.error) throw r.error;
+      await loadOrders();
+    }catch(e){ toast('Update failed','err'); }
+  };
+
+})();
+</script>
+</body>
+</html>
