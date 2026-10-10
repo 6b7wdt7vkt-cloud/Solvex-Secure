@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0F2A43">
+<title>Loading… | Solvex Secure</title>
+<meta name="description" content="">
+<meta property="og:type" content="product">
+<link rel="icon" href="/assets/logo-icon.png">
+<link rel="stylesheet" href="/assets/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <nav class="wrap">
+    <a class="brand" href="/">
+      <img class="brand-logo" src="/assets/logo-icon.png" alt="Solvex logo">
+      <span class="bt">SOLVEX<small>SECURE</small></span>
+    </a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/shop.html" class="btn-nav-shop">Shop</a>
+      <a href="/#contact" class="btn-nav-enq">Enquire</a>
+      <button class="cart-nav-btn" onclick="openCart()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        Cart <span class="cart-badge" id="cart-badge">0</span>
+      </button>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div id="product-loading" class="detail-wrap">
+    <div class="loading-state"><span class="spinner"></span><p style="margin-top:14px">Loading product…</p></div>
+  </div>
+  <div id="product-content" class="detail-wrap" style="display:none">
+    <button class="back-link" onclick="history.back()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Back to shop
+    </button>
+    <div class="detail-grid">
+      <div class="detail-img-wrap" id="detail-img-wrap">
+        <div style="color:var(--dim)">No image</div>
+      </div>
+      <div class="detail-info">
+        <div class="detail-category" id="detail-cat"></div>
+        <div class="detail-name" id="detail-name"></div>
+        <div class="detail-desc" id="detail-desc" style="display:none"></div>
+        <div class="detail-specs" id="detail-specs"></div>
+        <div class="detail-price" id="detail-price"></div>
+        <div id="detail-stock"></div>
+        <div class="detail-add-row">
+          <select class="detail-qty-sel" id="detail-qty">
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option>6</option><option>7</option><option>8</option>
+            <option>9</option><option>10</option>
+          </select>
+          <button class="detail-add-btn" id="detail-add-btn">Add to cart</button>
+        </div>
+        <div class="detail-in-cart" id="detail-in-cart"></div>
+        <div class="delivery-info">
+          <strong>Delivery</strong> — via Courier Guy, Aramex or similar. Delivery fee is quoted after order based on your location and the weight of your purchase.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="product-error" class="detail-wrap" style="display:none">
+    <p style="color:var(--dim)">Product not found. <a href="/shop.html" style="color:var(--gold2)">Back to shop →</a></p>
+  </div>
+</main>
+
+<!-- Related products -->
+<section id="related-section" style="display:none">
+  <div class="wrap" style="padding-bottom:64px">
+    <h2 style="margin-bottom:24px;font-size:22px">More products</h2>
+    <div class="prod-grid" id="related-grid"></div>
+  </div>
+</section>
+
+<!-- Cart drawer -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<div class="cart-drawer" id="cart-drawer">
+  <div class="drawer-head"><h3>Your cart</h3><button class="close-btn" onclick="closeCart()">×</button></div>
+  <div class="drawer-body" id="cart-body"></div>
+  <div class="drawer-foot" id="cart-foot" style="display:none">
+    <div class="del-note">Delivery via Courier Guy, Aramex or similar — quoted based on your location and order weight.</div>
+    <div class="cart-row"><span>Subtotal</span><span id="cart-sub">R 0</span></div>
+    <div class="cart-row"><span>Delivery</span><span id="cart-del" style="color:var(--dim)">TBD</span></div>
+    <div class="cart-row total"><span>Total</span><span class="val" id="cart-tot">R 0</span></div>
+    <a href="/checkout.html" class="checkout-btn">Proceed to checkout →</a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap frow">
+    <div class="flogo"><img src="/assets/logo-lockup.png" alt="Solvex Secure"></div>
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="/shop.html">Shop</a>
+      <a href="/#contact">Contact</a>
+    </div>
+  </div>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/assets/app.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  // Read slug from URL path: /products/lifepo4-100ah → 'lifepo4-100ah'
+  var parts = window.location.pathname.split('/').filter(Boolean);
+  var slug = parts[parts.length - 1];
+
+  var product = null;
+
+  function updateInCartState(){
+    var item = cartItem(product.id);
+    var el = document.getElementById('detail-in-cart');
+    if(el) el.style.display = item ? 'block' : 'none';
+    if(el && item) el.textContent = '✓ ' + item.qty + ' in cart';
+  }
+
+  async function loadProduct(){
+    if(!slug){
+      showError(); return;
+    }
+    try{
+      var res = await sb.from('products').select('*').eq('slug', slug).eq('active', true).single();
+      if(res.error || !res.data){ showError(); return; }
+      product = res.data;
+      renderProduct(product);
+      loadRelated(product);
+    }catch(e){
+      showError();
+    }
+  }
+
+  function renderProduct(p){
+    // Update page SEO
+    document.title = p.name + ' | Solvex Secure';
+    document.querySelector('meta[name="description"]').content = p.description || (p.name + ' — available from Solvex Secure.');
+    document.querySelector('meta[property="og:title"]') && (document.querySelector('meta[property="og:title"]').content = p.name + ' | Solvex Secure');
+
+    // Image
+    var imgWrap = document.getElementById('detail-img-wrap');
+    imgWrap.innerHTML = p.image_url
+      ? '<img src="'+esc(p.image_url)+'" alt="'+esc(p.name)+'">'
+      : '<div style="color:var(--dim)">No image</div>';
+
+    // Category
+    document.getElementById('detail-cat').textContent = p.category || '';
+
+    // Name
+    document.getElementById('detail-name').textContent = p.name;
+
+    // Description
+    var descEl = document.getElementById('detail-desc');
+    if(p.description){ descEl.textContent = p.description; descEl.style.display = 'block'; }
+
+    // Specs
+    document.getElementById('detail-specs').innerHTML = (p.specs||[]).map(function(c){
+      return '<span class="spec-chip">'+esc(c)+'</span>';
+    }).join('');
+
+    // Price
+    document.getElementById('detail-price').innerHTML = fmt(p.price) + ' <small>per unit</small>';
+
+    // Stock
+    var stockEl = document.getElementById('detail-stock');
+    stockEl.innerHTML = p.stock > 0
+      ? '<span class="detail-stock in">'+p.stock+' in stock</span>'
+      : '<span class="detail-stock out">Out of stock</span>';
+
+    // Add to cart
+    var addBtn = document.getElementById('detail-add-btn');
+    if(p.stock <= 0) addBtn.disabled = true;
+    addBtn.addEventListener('click', function(){
+      var qty = parseInt(document.getElementById('detail-qty').value) || 1;
+      addToCart(p, qty);
+      updateInCartState();
+      openCart();
+    });
+
+    updateInCartState();
+
+    // Show content
+    document.getElementById('product-loading').style.display = 'none';
+    document.getElementById('product-content').style.display = 'block';
+  }
+
+  async function loadRelated(p){
+    try{
+      var res = await sb.from('products').select('id,name,price,slug,image_url,specs,description,category')
+        .eq('active', true).eq('category', p.category).neq('id', p.id).limit(4);
+      if(res.error || !res.data || !res.data.length) return;
+      var section = document.getElementById('related-section');
+      var grid = document.getElementById('related-grid');
+      var qtyOpts = '';
+      for(var n=1;n<=10;n++) qtyOpts+='<option value="'+n+'">'+n+'</option>';
+      grid.innerHTML = res.data.map(function(rp){
+        var chips = (rp.specs||[]).map(function(c){ return '<span class="spec-chip">'+esc(c)+'</span>'; }).join('');
+        return '<div class="prod-card">'+
+          '<a href="/products/'+esc(rp.slug)+'" style="display:flex;flex-direction:column;flex:1;text-decoration:none">'+
+            '<div class="prod-img">'+(rp.image_url?'<img src="'+esc(rp.image_url)+'" alt="'+esc(rp.name)+'" loading="lazy">':'')+'</div>'+
+            '<div class="prod-body" style="padding-bottom:0">'+
+              '<div class="prod-name">'+esc(rp.name)+'</div>'+
+              '<div class="prod-specs">'+chips+'</div>'+
+              '<div class="prod-price">'+fmt(rp.price)+' <small>per unit</small></div>'+
+              '<div class="view-link">View details →</div>'+
+            '</div>'+
+          '</a>'+
+          '<div class="prod-actions">'+
+            '<select class="qty-select" id="rqs-'+rp.id+'">'+qtyOpts+'</select>'+
+            '<button class="add-btn" data-rid="'+rp.id+'" data-rname="'+esc(rp.name)+'" data-rprice="'+rp.price+'" data-rimg="'+esc(rp.image_url||'')+'" data-rslug="'+esc(rp.slug||'')+'">Add to cart</button>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+      grid.onclick = function(e){
+        if(e.target.closest('a')) return;
+        var btn = e.target.closest('[data-rid]');
+        if(!btn) return;
+        var rp = {id:btn.dataset.rid,name:btn.dataset.rname,price:parseFloat(btn.dataset.rprice),image_url:btn.dataset.rimg,slug:btn.dataset.rslug};
+        var sel = document.getElementById('rqs-'+rp.id);
+        addToCart(rp, sel?parseInt(sel.value)||1:1);
+        openCart();
+      };
+      section.style.display = 'block';
+    }catch(e){}
+  }
+
+  function showError(){
+    document.getElementById('product-loading').style.display = 'none';
+    document.getElementById('product-error').style.display = 'block';
+  }
+
+  // Re-render in-cart state when cart changes
+  var _origRefresh = window.refreshCartUI;
+  window.refreshCartUI = function(){
+    if(_origRefresh) _origRefresh();
+    if(product) updateInCartState();
+  };
+
+  initCartDrawer();
+  loadProduct();
+})();
+</script>
+</body>
+</html>
